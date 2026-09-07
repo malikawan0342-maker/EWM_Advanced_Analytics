@@ -6,10 +6,12 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 30
 
-    material_input = ft.TextField(label="Material ID (e.g., MAT-1001)", width=300)
+    material_input = ft.TextField(label="Material ID (e.g., MAT-1002)", width=300)
     qty_input = ft.TextField(label="Quantity", width=150)
     
-    # Expanded table columns to include analytical classifications
+    # Status text box to display operational messages directly on screen
+    status_text = ft.Text("System ready. Perform inbound or outbound transaction.", size=14, weight=ft.FontWeight.BOLD, color="blue")
+
     table = ft.DataTable(
         columns=[
             ft.DataColumn(ft.Text("Material ID")),
@@ -43,28 +45,35 @@ def main(page: ft.Page):
 
     def handle_inbound(e):
         if material_input.value and qty_input.value:
-            db.goods_receipt(material_input.value, int(qty_input.value))
-            material_input.value = ""
-            qty_input.value = ""
-            load_data()
-            page.snack_bar = ft.SnackBar(ft.Text("Goods Receipt successful! Stock updated."), bgcolor="green")
-            page.snack_bar.open = True
-            page.update()
-
-    def handle_outbound(e):
-        if material_input.value and qty_input.value:
-            mat_id = material_input.value
-            db.goods_issue(mat_id, int(qty_input.value))
+            mat_id = material_input.value.strip().upper()
+            qty = int(qty_input.value)
+            db.goods_receipt(mat_id, qty)
             material_input.value = ""
             qty_input.value = ""
             load_data()
             
+            status_text.value = f"Success: Goods Receipt processed for {mat_id}. Stock replenished."
+            status_text.color = "green"
+            page.update()
+
+    def handle_outbound(e):
+        if material_input.value and qty_input.value:
+            mat_id = material_input.value.strip().upper()
+            qty = int(qty_input.value)
+            
+            db.goods_issue(mat_id, qty)
+            material_input.value = ""
+            qty_input.value = ""
+            load_data()
+            
+            # Check reorder status and display clear on-screen warning
             if db.check_reorder_level(mat_id):
-                page.snack_bar = ft.SnackBar(ft.Text(f"WARNING: JIT Reorder threshold reached for {mat_id}! Restock immediately."), bgcolor="red")
+                status_text.value = f"CRITICAL WARNING: Material {mat_id} breached JIT threshold! Restock required."
+                status_text.color = "red"
             else:
-                page.snack_bar = ft.SnackBar(ft.Text("Goods Issue successful!"), bgcolor="blue")
+                status_text.value = f"Success: Goods Issue processed for {mat_id}. Stock levels optimal."
+                status_text.color = "blue"
                 
-            page.snack_bar.open = True
             page.update()
 
     inbound_btn = ft.ElevatedButton("Goods Receipt (Inbound)", on_click=handle_inbound, color="green")
@@ -74,6 +83,7 @@ def main(page: ft.Page):
         ft.Text("SAP EWM - Advanced Material & ABC/XYZ Analytics", size=24, weight=ft.FontWeight.BOLD),
         ft.Row([material_input, qty_input]),
         ft.Row([inbound_btn, outbound_btn]),
+        status_text,  # Permanently visible status display right on screen
         ft.Divider(),
         table
     )
